@@ -51,3 +51,19 @@ shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass)
 shared/pixelui  header-only pixel-art UI framework
 tests/          DSP unit test and UI snapshot tools
 ```
+
+## License
+
+Copyright (C) 2026 n-f.pro
+
+This project is free software: you can redistribute it and/or modify it under the terms of the
+**GNU Affero General Public License v3.0** as published by the Free Software Foundation – see [`LICENSE`](LICENSE).
+It is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+- Built with [JUCE](https://juce.com), used under the AGPLv3 option of JUCE's dual licence.
+- The licence covers the code and the assets in this repository. It grants no rights to the names
+  “n-f.pro” or the plugin names as trademarks.
+- VST is a registered trademark of Steinberg Media Technologies GmbH.
+
+Ready-made Windows builds with SHA-256 checksums: [n-f.pro/tools](https://n-f.pro/tools/) and the GitHub releases of this repository.
