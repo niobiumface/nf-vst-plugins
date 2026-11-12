@@ -24,3 +24,4 @@ target_link_libraries(dsp_test PRIVATE sharedsp)
 # Plugins
 add_subdirectory(plugins/CUtTA)
 add_subdirectory(plugins/Sub)
+add_subdirectory(plugins/IronS)

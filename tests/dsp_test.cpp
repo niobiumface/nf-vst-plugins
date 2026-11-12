@@ -2,9 +2,11 @@
 #include <dsp/NoiseGate.h>
 #include <dsp/LookaheadLimiter.h>
 #include <dsp/StackedLowpass.h>
+#include <dsp/DeEsser.h>
 #include <cstdio>
 #include <cmath>
 #include <random>
+#include <vector>
 
 static int failures = 0;
 #define CHECK(cond, ...) do { if (! (cond)) { ++failures; std::printf ("FAIL: " __VA_ARGS__); std::printf ("\n"); } } while (0)
@@ -78,6 +80,117 @@ int main()
         CHECK (std::isfinite (res) && res < 20.0f, "resonance unstable (%f) at %.0f Hz", res, fs);
         const float top = sineGain (100.0f, 20000.0f, 1.0f, 4.0f);
         CHECK (std::isfinite (top), "cutoff clamp failed at %.0f Hz", fs);
+
+        // --- de-esser
+        {
+            const double twoPi = 6.283185307179586;
+            // runs a mono signal through the de-esser, returns the output peak over the last quarter
+            auto run = [fs] (const sdsp::DeEsserParams& dp, auto&& signal, double seconds, float* peakAll = nullptr)
+            {
+                sdsp::DeEsser de;
+                de.prepare (fs);
+                de.setParams (dp);
+                de.reset();
+                const int n = (int) (fs * seconds);
+                float pk = 0.0f, all = 0.0f;
+                for (int i = 0; i < n; ++i)
+                {
+                    float in[1] = { signal (i) }, out[1], dry[1];
+                    de.processFrame (in, out, dry, 1);
+                    all = std::max (all, std::abs (out[0]));
+                    if (i > n * 3 / 4) pk = std::max (pk, std::abs (out[0]));
+                }
+                if (peakAll != nullptr) *peakAll = all;
+                return pk;
+            };
+            auto sine = [fs, twoPi] (double f, float a) { return [=] (int i) { return a * (float) std::sin (twoPi * f * i / fs); }; };
+
+            sdsp::DeEsserParams dp; // relative, band, split, -14 dB, range 9 dB
+
+            // a pure sibilance-band tone is reduced by about the range, in split and wideband mode
+            for (bool split : { true, false })
+            {
+                dp.split = split;
+                const float ess = run (dp, sine (6500.0, 0.25f), 0.5);
+                const float redDb = 20.0f * std::log10 (ess / 0.25f);
+                CHECK (redDb < -7.0f && redDb > -9.5f, "de-esser reduction %.2f dB (split=%d) at %.0f Hz", redDb, (int) split, fs);
+                // a low tone is left alone
+                const float low = run (dp, sine (200.0, 0.25f), 0.5);
+                CHECK (std::abs (20.0f * std::log10 (low / 0.25f)) < 0.2f, "de-esser touched a 200 Hz tone (split=%d): %f at %.0f Hz", (int) split, low, fs);
+            }
+            dp.split = true;
+
+            // vowel + sibilant: only the highs go down in split mode, and never by more than the range
+            {
+                const float mixPk = run (dp, [&] (int i) { return sine (200.0, 0.05f) (i) + sine (7000.0, 0.25f) (i); }, 0.5);
+                CHECK (mixPk < 0.25f && mixPk > 0.05f + 0.25f * 0.33f, "de-esser mixed signal peak %f at %.0f Hz", mixPk, fs);
+            }
+
+            // no reduction = a pure delay, wideband and split (the dynamic shelf is transparent at unity)
+            for (bool split : { false, true })
+            {
+                sdsp::DeEsser de;
+                de.prepare (fs);
+                auto t = dp; t.rangeDb = 0.0f; t.split = split; t.smack = 1.0f;
+                de.setParams (t); de.reset();
+                const int L = de.getLatency();
+                std::vector<float> in ((size_t) (fs * 0.5));
+                float maxErr = 0.0f;
+                for (size_t i = 0; i < in.size(); ++i)
+                {
+                    in[i] = 0.4f * (float) std::sin ((double) i * 0.9) + 0.2f * (float) std::sin ((double) i * 0.011);
+                    float f[1] = { in[i] }, d[1];
+                    de.processFrame (f, f, d, 1);
+                    if (i >= (size_t) L + (size_t) (fs * 0.3)) maxErr =std::max (maxErr, std::abs (f[0] - in[i - (size_t) L]));
+                }
+                CHECK (maxErr < 2e-5f, "de-esser not transparent without reduction (split=%d): err %g at %.0f Hz", (int) split, maxErr, fs);
+                CHECK (L == (int) std::lround (0.005 * fs), "de-esser latency %d at %.0f Hz", L, fs);
+            }
+
+            // smack: a 1.5 ms click out of silence is ducked, a sustained tone recovers
+            {
+                auto t = dp; t.rangeDb = 0.0f;
+                const int start = (int) (fs * 0.3), len = (int) (fs * 0.0015);
+                auto click = [&] (int i) { return (i >= start && i < start + len) ? sine (5000.0, 0.5f) (i - start) : 0.0f; };
+                float off = 0.0f, on = 0.0f;
+                run (t, click, 0.4, &off);
+                t.smack = 1.0f;
+                run (t, click, 0.4, &on);
+                CHECK (on < off * 0.3f, "smack did not duck a click: %f -> %f at %.0f Hz", off, on, fs);
+                // ... also 100 ms after a loud sound has ended
+                auto wordThenClick = [&] (int i) { return i < start - (int) (fs * 0.1) ? sine (5000.0, 0.25f) (i) : click (i); };
+                auto peakAfter = [&] (const sdsp::DeEsserParams& q)
+                {
+                    sdsp::DeEsser de; de.prepare (fs); de.setParams (q); de.reset();
+                    float pk = 0.0f;
+                    for (int i = 0; i < (int) (fs * 0.4); ++i)
+                    {
+                        float f[1] = { wordThenClick (i) }, d[1];
+                        de.processFrame (f, f, d, 1);
+                        if (i > start - (int) (fs * 0.05)) pk = std::max (pk, std::abs (f[0]));
+                    }
+                    return pk;
+                };
+                auto noSmack = t; noSmack.smack = 0.0f;
+                const float late = peakAfter (t), lateOff = peakAfter (noSmack);
+                CHECK (late < lateOff * 0.5f, "smack missed a click after a word: %f -> %f at %.0f Hz", lateOff, late, fs);
+                const float sus = run (t, sine (5000.0, 0.25f), 1.0);
+                CHECK (std::abs (20.0f * std::log10 (sus / 0.25f)) < 0.5f, "smack ducks a sustained tone: %f at %.0f Hz", sus, fs);
+            }
+
+            // stays finite with hot noise in every mode
+            {
+                std::mt19937 nrng (7);
+                std::uniform_real_distribution<float> nuni (-4.0f, 4.0f);
+                for (int mode = 0; mode < 8; ++mode)
+                {
+                    auto t = dp; t.relative = mode & 1; t.bandDetect = mode & 2; t.split = mode & 4; t.smack = 0.7f; t.rangeDb = 24.0f; t.freqHz = 16000.0f;
+                    float all = 0.0f;
+                    run (t, [&] (int) { return nuni (nrng); }, 0.2, &all);
+                    CHECK (std::isfinite (all) && all < 16.0f, "de-esser unstable in mode %d: %f at %.0f Hz", mode, all, fs);
+                }
+            }
+        }
     }
 
     std::printf (failures == 0 ? "ALL DSP TESTS PASSED\n" : "%d DSP TEST(S) FAILED\n", failures);

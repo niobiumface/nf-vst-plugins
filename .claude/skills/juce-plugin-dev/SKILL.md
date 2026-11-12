@@ -31,6 +31,7 @@ Configure with `-DPLUGINS_COPY_AFTER_BUILD=ON` from an elevated shell to install
 ## Adding a new plugin
 1. Copy `plugins/CUtTA` to `plugins/<Name>`, rename classes, change `PLUGIN_CODE` (4 chars, one uppercase) and `PRODUCT_NAME`.
 2. Add `add_subdirectory(plugins/<Name>)` to the root CMakeLists.
+   The CMake target may differ from `PRODUCT_NAME` (target `IronS`, product "Iron S" -> artefacts `Iron S.vst3`, `Iron S.exe`).
 3. Keep manufacturer code `Ctta`-style codes unique per plugin; never change a released plugin's code (hosts lose sessions).
 
 ## Rules that must hold

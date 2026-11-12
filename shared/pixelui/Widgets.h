@@ -182,6 +182,100 @@ private:
 };
 
 //==============================================================================
+/** "LABEL OPT OPT OPT" segmented switch bound to a choice parameter. Click an option to select it,
+    click the label (or use the wheel) to step through. */
+class Choice : public Widget
+{
+public:
+    Choice (juce::RangedAudioParameter& p, juce::String labelText, juce::StringArray optionTexts, RGB accentColour = pal::blood)
+        : param (p), label (std::move (labelText)), options (std::move (optionTexts)), accent (accentColour),
+          attachment (p, [this] (float v) { index = juce::jlimit (0, options.size() - 1, juce::roundToInt (v)); })
+    {
+        attachment.sendInitialUpdate();
+        lit.resize ((size_t) options.size(), 0.0f);
+        lit[(size_t) index] = 1.0f;
+    }
+
+    RGB hot = pal::ember;  // text colour of the selected option
+    RGB dim = pal::rust;   // plate behind the selected option
+
+    int getIndex() const noexcept { return index; }
+
+    /** Width in logical pixels (height is 7). */
+    int getPreferredWidth() const
+    {
+        int w = font::textWidth (label.toStdString()) + labelGap;
+        for (auto& o : options) w += font::textWidth (o.toStdString()) + optionGap;
+        return w - optionGap + 2;
+    }
+
+    void update (float dt) override
+    {
+        for (int i = 0; i < options.size(); ++i)
+            lit[(size_t) i] += ((i == index ? 1.0f : 0.0f) - lit[(size_t) i]) * ease (dt, 16.0f);
+    }
+
+    void paint (Canvas& c) override
+    {
+        const int y = bounds.getY() + 1;
+        font::drawText (c, bounds.getX(), y, label.toStdString(), hovered && hoverOpt < 0 ? pal::bone : pal::smoke);
+        for (int i = 0; i < options.size(); ++i)
+        {
+            const auto txt = options[i].toStdString();
+            const int x = optionX (i), w = font::textWidth (txt);
+            const float l = lit[(size_t) i];
+            if (l > 0.03f) c.fillRect (x - 2, y - 1, w + 4, 7, mix (pal::ink, dim, l));
+            const RGB off = hovered && hoverOpt == i ? pal::bone : mix (pal::ash, pal::smoke, 0.6f);
+            font::drawText (c, x, y, txt, mix (off, hot, l));
+        }
+    }
+
+    void mouseMove (juce::Point<float> p) override { hoverOpt = optionAt (p); }
+
+    void mouseDown (juce::Point<float> p, const juce::ModifierKeys&) override
+    {
+        const int i = optionAt (p);
+        attachment.setValueAsCompleteGesture ((float) (i >= 0 ? i : (index + 1) % options.size()));
+    }
+
+    void mouseWheel (float dy, const juce::ModifierKeys&) override
+    {
+        attachment.setValueAsCompleteGesture ((float) juce::jlimit (0, options.size() - 1, index + (dy > 0.0f ? -1 : 1)));
+    }
+
+    juce::MouseCursor getCursor() const override { return juce::MouseCursor::PointingHandCursor; }
+    juce::String getReadout() const override { return param.getName (32) + " " + param.getCurrentValueAsText(); }
+
+private:
+    static constexpr int labelGap = 6, optionGap = 6;
+
+    int optionX (int i) const
+    {
+        int x = bounds.getX() + font::textWidth (label.toStdString()) + labelGap;
+        for (int k = 0; k < i; ++k) x += font::textWidth (options[k].toStdString()) + optionGap;
+        return x;
+    }
+
+    int optionAt (juce::Point<float> p) const
+    {
+        for (int i = 0; i < options.size(); ++i)
+        {
+            const float x = (float) optionX (i);
+            if (p.x >= x - 3.0f && p.x < x + (float) font::textWidth (options[i].toStdString()) + 3.0f) return i;
+        }
+        return -1;
+    }
+
+    juce::RangedAudioParameter& param;
+    juce::String label;
+    juce::StringArray options;
+    RGB accent;
+    int index = 0, hoverOpt = -1;
+    std::vector<float> lit;
+    juce::ParameterAttachment attachment;
+};
+
+//==============================================================================
 /** "< NAME >" stepper (e.g. presets). Arrows step, clicking the name calls onClick (e.g. a menu). */
 class Selector : public Widget
 {

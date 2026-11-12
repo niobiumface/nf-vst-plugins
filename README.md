@@ -9,6 +9,7 @@ More info and direct downloads: <https://n-f.pro/tools/vst/>
 | --- | --- | --- |
 | **CUtTA** | Noise gate + lookahead brickwall limiter, 12 factory presets | <https://n-f.pro/tools/cutta/> |
 | **Sub** | Stacked lowpass (1–4 layers × 12 dB/oct), resonance, drive, mix; a demon nun kneels deeper the darker the filter | <https://n-f.pro/tools/sub/> |
+| **Iron S** | De-esser with click / lip-smack removal, real-time spectrum and 12 factory presets; a steam iron presses the wrinkles (sibilants) out of the cloth | – |
 
 ## CUtTA
 
@@ -25,6 +26,21 @@ Up to four cascaded zero-delay-feedback state-variable lowpass layers (12–48 d
 
 - **Cutoff** 20 Hz–20 kHz, **Resonance** 0–100 %, **Layers** 1–4, **Drive** 0–24 dB, **Mix** 0–100 %, **Output** −24…+12 dB
 - The UI is a demon nun: the darker the filter, the further she sinks from standing to kneeling, head bowed
+
+## Iron S
+
+De-esser for vocals, podcasts and anything harsh, with a second stage for lip smacks and clicks.
+
+- **Threshold** (−60…0 dB) – or simply drag the iron: the height of its sole above the board *is* the threshold
+- **Range** 0–24 dB (maximum reduction), **Frequency** 2–16 kHz, **Width** 0.3–3 oct, **Speed** (release) 5–300 ms
+- **Mode** relative (level-independent, follows the voice at any input gain) or absolute
+- **Detect** band or highpass, **Cut** wideband or split (dynamic high shelf – bit-transparent while nothing is reduced)
+- **Smack** 0–100 %: transient detector that ducks short clicks and lip smacks above 1.5 kHz
+- **Lookahead** 0–5 ms at a constant 5 ms latency, **Stereo link** 0–100 %, **Output** ±12 dB, bypass with latency compensation
+- **Listen**: output, detector sidechain, or delta (only what is removed)
+- **Displays**: spectrum of input and output with the removed part highlighted, detector band and filter curve (drag: frequency / width), IN / GR / SMK / OUT meters with peak hold, the cloth as level and reduction history
+- **FIND S** listens to the playing audio for three seconds and sets the frequency to the sibilance peak
+- Presets: INIT, FEMALE VOX, MALE VOX, BRIGHT POP VOX, PODCAST, SMACK KILLER, WHISPER, HEAVY LISP, GENTLE WIDE, CYMBAL TAME, GUITAR FIZZ, MASTER DE-HARSH
 
 ## Build
 
@@ -47,7 +63,8 @@ Copy `<Name>.vst3` to `C:\Program Files\Common Files\VST3\` and rescan plugins i
 ```
 plugins/CUtTA   gate + limiter
 plugins/Sub     stacked lowpass
-shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass)
+plugins/IronS   de-esser + smack remover
+shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass, DeEsser)
 shared/pixelui  header-only pixel-art UI framework
 tests/          DSP unit test and UI snapshot tools
 ```

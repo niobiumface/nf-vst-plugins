@@ -15,7 +15,7 @@ every visible element is made of real logical pixels. That is what makes it look
 - `PixelFont.h` – 3×5 font (A–Z, 0–9, symbols) via `drawText(canvas, x, y, text, colour, scale)` and `textWidth`.
 - `Palette.h` – the shared dark palette (see below). Plugins may add one accent palette, nothing else.
 - `Widget.h` – `px::Widget` base (logical bounds, `paint(Canvas&, float time)`, `update(dt)`, mouse callbacks).
-- `Widgets.h` – `Knob` (LED-ring, vertical drag, shift = fine, double-click = default, wheel), `Led­Toggle`, `VMeter` (segmented, peak hold).
+- `Widgets.h` – `Knob` (LED-ring, vertical drag, shift = fine, double-click = default, wheel), `Led­Toggle`, `VMeter` (segmented, peak hold). Also `Choice` (segmented switch for choice parameters) and `Selector` (preset stepper).
 - `PixelEditor.h` – `px::PixelEditor : juce::AudioProcessorEditor`: owns canvas + widgets, drives animations from a `juce::VBlankAttachment`, maps mouse coordinates, draws scanlines, handles the scale button.
 
 ## Palette (dark modern)
@@ -39,6 +39,12 @@ Rules: max one saturated accent per plugin; large areas stay near-black; light c
 - Every animation must react to audio or interaction, or be very subtle ambience (ash particles, flicker).
 - Ease displayed values (`v += (target - v) * (1 - exp(-dt * k))`) so knobs and meters glide.
 - Budget: whole frame < 1 ms. Canvas is tiny; avoid allocations per frame.
+
+## Scene = meter
+The best scenes are honest displays: in Iron S the wrinkle height is the detector level in dB and the iron's sole
+sits at the threshold, so the art can be read like a meter. Ease meter values before drawing them
+(audio blocks can be slower than frames). Each plugin has a `tests/<name>_snapshot.cpp` tool that renders the editor
+to PNG without a host – Iron S's plays a synthetic voice through the real processor first.
 
 ## New editor recipe
 1. Subclass `px::PixelEditor`, pass logical size.
