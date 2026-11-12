@@ -42,6 +42,13 @@ Because the min-hold window ≥ the average window, `g` never exceeds the requir
   5 ms hold + 7 ms fade window, so clicks vanish and sustained sounds only lose the first milliseconds.
 - Filter coefficients are smoothed and recomputed every 16 samples, not per sample.
 
+## Saturator (`shared/dsp/Saturator.h`)
+- Runs at the oversampled rate; the plugin uses `juce::dsp::Oversampling` (4×, FIR equiripple, `useIntegerLatency = true`) and reports that latency.
+- Every curve has slope 1 at 0, so 0 dB drive leaves quiet signals untouched. Bias: `f(u + b) - f(b)` (no DC at rest), then a DC blocker.
+- Do the dry/wet mix *inside* the oversampled domain: dry and wet then share the same filters (no comb filtering); bypass = mix 0 through the same path keeps latency constant.
+- Auto gain: RMS of a −12 dBFS sine through the curve (128-point table) vs. in, clamped to −24…+12 dB, computed once per block and smoothed.
+- Mode switches crossfade the two curves over 25 ms. Tilt gains are computed per block, never `exp` per sample.
+
 ## Metering
 - Audio thread writes peak values into `std::atomic<float>` using a "max since last read" pattern; UI reads with `exchange(0)` each frame.
 - Gain reduction is reported as the minimum gain in the block.

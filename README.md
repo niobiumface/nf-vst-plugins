@@ -10,6 +10,7 @@ More info and direct downloads: <https://n-f.pro/tools/vst/>
 | **CUtTA** | Noise gate + lookahead brickwall limiter, 12 factory presets | <https://n-f.pro/tools/cutta/> |
 | **Sub** | Stacked lowpass (1–4 layers × 12 dB/oct), resonance, drive, mix; a demon nun kneels deeper the darker the filter | <https://n-f.pro/tools/sub/> |
 | **Iron S** | De-esser with click / lip-smack removal, real-time spectrum and 12 factory presets; a steam iron presses the wrinkles (sibilants) out of the cloth | – |
+| **Pyre** | Saturator (tube, tape, fuzz, wavefolder) with 4× oversampling, bias, tone, mix, auto gain and 12 factory presets; a pyre burns higher the harder you drive | – |
 
 ## CUtTA
 
@@ -42,6 +43,18 @@ De-esser for vocals, podcasts and anything harsh, with a second stage for lip sm
 - **FIND S** listens to the playing audio for three seconds and sets the frequency to the sibilance peak
 - Presets: INIT, FEMALE VOX, MALE VOX, BRIGHT POP VOX, PODCAST, SMACK KILLER, WHISPER, HEAVY LISP, GENTLE WIDE, CYMBAL TAME, GUITAR FIZZ, MASTER DE-HARSH
 
+## Pyre
+
+Waveshaping saturator, 4× oversampled (linear-phase FIR, constant integer latency).
+
+- **Drive** 0–36 dB – or drag the fire up and down; the flame height *is* the level hitting the curve
+- **Mode** TUBE (asymmetric tanh), TAPE (soft cubic), FUZZ (nearly hard clip), FOLD (sine wavefolder), crossfaded on switch
+- **Bias** ±100 % (asymmetry → even harmonics; the wind in the scene), **Tone** ±100 % (tilt around 700 Hz)
+- **Mix** 0–100 % (dry and wet share the oversampling filters, so parallel saturation has no comb effects), **Output** −24…+12 dB
+- **Auto gain** keeps the level of a −12 dBFS sine constant at any drive / mode / bias; bypass with latency compensation
+- **Displays**: live transfer curve (the part your signal uses is lit), harmonics 2–10 of the current curve at the current input level, IN / HEAT / OUT meters (HEAT = dB into the curve, 0 = knee)
+- Presets: INIT, EMBERS, WARM TUBE, TAPE GLUE, HOT TAPE, PARALLEL HEAT, DRUM CRUSH, BASS BURN, FUZZ BOX, SPUTTER, FOLDBACK, WITCH HOWL
+
 ## Build
 
 Needs Visual Studio 2022 (MSVC) and CMake ≥ 3.22. JUCE is not committed:
@@ -64,7 +77,8 @@ Copy `<Name>.vst3` to `C:\Program Files\Common Files\VST3\` and rescan plugins i
 plugins/CUtTA   gate + limiter
 plugins/Sub     stacked lowpass
 plugins/IronS   de-esser + smack remover
-shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass, DeEsser)
+plugins/Pyre    saturator
+shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass, DeEsser, Saturator)
 shared/pixelui  header-only pixel-art UI framework
 tests/          DSP unit test and UI snapshot tools
 ```

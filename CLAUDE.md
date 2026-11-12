@@ -21,6 +21,7 @@ JUCE is not committed: `git clone --depth 1 https://github.com/juce-framework/JU
 - **CUtTA** (`plugins/CUtTA`) – noise gate + lookahead brickwall limiter. Logo: the first "t" is an inverted cross. Accent: blood red.
 - **Sub** (`plugins/Sub`) – stacked lowpass (1–4 layers × 12 dB/oct, reso, drive, mix). UI: a demon nun that sinks from standing to kneeling with head bowed the darker the filter setting; face/eyes/horns darken too. Accent: sulphur violet (`subpal`).
 - **Iron S** (`plugins/IronS`, target `IronS`, product name "Iron S") – de-esser + click/lip-smack remover (`shared/dsp/DeEsser.h`). UI: a steam iron on an ironing board. Wrinkle height = detector level, the height of the iron's sole = threshold (drag the iron); what sticks out is pressed flat and steams, a ghost shows what was removed. Spectrum with FIND S (learns the sibilance frequency). Accent: hot-metal orange (`ironpal`).
+- **Pyre** (`plugins/Pyre`) – saturator (`shared/dsp/Saturator.h`: tube/tape/fuzz/fold, bias, tilt tone, mix, auto gain), 4× oversampled. UI: a pyre of logs around a stake with a skull; flame height = level into the shaper (drag the fire = drive), bias = wind, tone = flame colour, mode = how it burns. Live transfer curve + harmonics view. Accent: flame gold (`pyrepal`).
 
 ## Conventions
 - UI text and comments in English; talk to the user in German.

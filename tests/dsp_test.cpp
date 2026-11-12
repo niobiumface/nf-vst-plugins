@@ -3,6 +3,7 @@
 #include <dsp/LookaheadLimiter.h>
 #include <dsp/StackedLowpass.h>
 #include <dsp/DeEsser.h>
+#include <dsp/Saturator.h>
 #include <cstdio>
 #include <cmath>
 #include <random>
@@ -191,6 +192,72 @@ int main()
                 }
             }
         }
+    }
+
+    // --- saturator (Pyre)
+    {
+        using S = sdsp::Saturator;
+        for (int m = 0; m < S::numModes; ++m)
+        {
+            const float slope = S::shape (m, 1.0e-4f) / 1.0e-4f;
+            CHECK (std::abs (slope - 1.0f) < 1.0e-3f, "saturator mode %d: slope at 0 is %f, not 1", m, slope);
+
+            for (float driveDb : { 0.0f, 12.0f, 24.0f, 36.0f })
+                for (float bias01 : { -1.0f, 0.0f, 0.5f })
+                {
+                    const float dg = std::pow (10.0f, driveDb / 20.0f), b = bias01 * S::maxBias;
+                    const float comp = S::autoGain (m, dg, b);
+                    double sIn = 0.0, sOut = 0.0;
+                    for (int i = 0; i < 1000; ++i)
+                    {
+                        const float x = 0.25f * std::sin (6.2831853f * (float) i / 1000.0f);
+                        const float y = S::shapeBiased (m, dg * x, b) * comp;
+                        sIn += x * x; sOut += y * y;
+                    }
+                    const float errDb = 10.0f * std::log10 ((float) (sOut / sIn));
+                    const bool clamped = comp <= 1.0f / 16.0f + 1e-6f || comp >= 4.0f - 1e-6f;
+                    CHECK (clamped || std::abs (errDb) < 0.2f, "saturator auto gain off by %f dB (mode %d, %f dB, bias %f)", errDb, m, driveDb, bias01);
+                }
+        }
+
+        for (double fs : { 44100.0 * 4, 48000.0 * 4, 96000.0 * 4 })
+            for (int m = 0; m < S::numModes; ++m)
+            {
+                S sat;
+                sat.prepare (fs);
+                sat.setMode (m);
+                sat.reset();
+                const float lo = S::tiltLowGain (0.0f), hi = S::tiltHighGain (0.0f);
+
+                // quiet 1 kHz at 0 dB drive passes (nearly) unchanged; mix 0 is bit-exact dry
+                double sIn = 0.0, sOut = 0.0; float dryErr = 0.0f;
+                const int n = (int) fs;
+                for (int i = 0; i < n; ++i)
+                {
+                    sat.tick();
+                    const float x = 0.01f * (float) std::sin (6.283185307 * 1000.0 * i / fs);
+                    const float y = sat.process (0, x, 1.0f, 0.0f, lo, hi, 1.0f, 1.0f);
+                    dryErr = std::max (dryErr, std::abs (sat.process (1, x, 4.0f, 0.3f, lo, hi, 1.0f, 0.0f) - x));
+                    if (i > n / 2) { sIn += (double) x * x; sOut += (double) y * y; }
+                }
+                const float errDb = 10.0f * std::log10 ((float) (sOut / sIn));
+                CHECK (std::abs (errDb) < 0.1f, "saturator mode %d colours a quiet tone by %f dB at %.0f Hz", m, errDb, fs);
+                CHECK (dryErr == 0.0f, "saturator mode %d: mix 0 is not dry (%g)", m, dryErr);
+
+                // hot noise, full drive and bias, tone extremes, mode switching: stays finite and bounded
+                std::mt19937 nrng (3);
+                std::uniform_real_distribution<float> nuni (-4.0f, 4.0f);
+                float worst = 0.0f;
+                for (int i = 0; i < n / 4; ++i)
+                {
+                    if (i % 5000 == 0) sat.setMode ((m + i / 5000) % S::numModes);
+                    sat.tick();
+                    const float tone = (i / 7000) % 2 ? 1.0f : -1.0f;
+                    const float y = sat.process (0, nuni (nrng), 63.0f, S::maxBias, S::tiltLowGain (tone), S::tiltHighGain (tone), 4.0f, 1.0f);
+                    worst = std::max (worst, std::abs (y));
+                }
+                CHECK (std::isfinite (worst) && worst < 40.0f, "saturator unstable from mode %d: %f at %.0f Hz", m, worst, fs);
+            }
     }
 
     std::printf (failures == 0 ? "ALL DSP TESTS PASSED\n" : "%d DSP TEST(S) FAILED\n", failures);
