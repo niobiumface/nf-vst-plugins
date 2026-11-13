@@ -11,6 +11,7 @@ More info and direct downloads: <https://n-f.pro/tools/vst/>
 | **Sub** | Stacked lowpass (1–4 layers × 12 dB/oct), resonance, drive, mix; a demon nun kneels deeper the darker the filter | <https://n-f.pro/tools/sub/> |
 | **Iron S** | De-esser with click / lip-smack removal, real-time spectrum and 12 factory presets; a steam iron presses the wrinkles (sibilants) out of the cloth | – |
 | **Pyre** | Saturator (tube, tape, fuzz, wavefolder) with 4× oversampling, bias, tone, mix, auto gain and 12 factory presets; a pyre burns higher the harder you drive | – |
+| **Séance** | Tape delay with tempo sync, feedback up to 110 %, wow/flutter, filters in the feedback path, ping-pong and 12 factory presets; a planchette jumps across a talking board on every repeat | – |
 
 ## CUtTA
 
@@ -55,6 +56,18 @@ Waveshaping saturator, 4× oversampled (linear-phase FIR, constant integer laten
 - **Displays**: live transfer curve (the part your signal uses is lit), harmonics 2–10 of the current curve at the current input level, IN / HEAT / OUT meters (HEAT = dB into the curve, 0 = knee)
 - Presets: INIT, EMBERS, WARM TUBE, TAPE GLUE, HOT TAPE, PARALLEL HEAT, DRUM CRUSH, BASS BURN, FUZZ BOX, SPUTTER, FOLDBACK, WITCH HOWL
 
+## Séance
+
+Tape delay: every repeat goes through the record head again – darker, thinner and a little more saturated each time.
+
+- **Time** 1–2000 ms, or **Sync** to the host tempo (1/64 … 1/1 incl. dotted and triplets, up to 4 s); time changes glide like a tape motor (pitch bends, no clicks)
+- **Feedback** 0–110 % with tape saturation in the loop: above 100 % it swells into self-oscillation instead of blowing up
+- **Wow/Flutter** 0–100 % (slow wow with random drift + fast flutter)
+- **Low cut** 20 Hz–2 kHz and **High cut** 1–20 kHz (12 dB/oct each) in the feedback path, so they act on every repeat
+- **Ping-pong** (input summed into the left line, the repeats bounce between the sides), **Mix** 0–100 % (dry stays at full level up to 50 %), bypass lets the tails die out unheard
+- **Display**: drag the board (left/right = time, up/down = feedback). Each repeat makes the planchette jump to the next letter and leaves a fading ghost; the candles flare on the side the echo comes from; the REPEATS view shows the level of every repeat
+- Presets: INIT, SLAPBACK, DOTTED EIGHTHS, WHISPERING WALLS, PING PONG GHOSTS, DUB SPIRITS, WARPED TAPE, CELLAR ECHO, THIN AIR, LONG GOODBYE, VOICES, POSSESSED
+
 ## Build
 
 Needs Visual Studio 2022 (MSVC) and CMake ≥ 3.22. JUCE is not committed:
@@ -78,7 +91,8 @@ plugins/CUtTA   gate + limiter
 plugins/Sub     stacked lowpass
 plugins/IronS   de-esser + smack remover
 plugins/Pyre    saturator
-shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass, DeEsser, Saturator)
+plugins/Seance  tape delay
+shared/dsp      header-only DSP (NoiseGate, LookaheadLimiter, StackedLowpass, DeEsser, Saturator, TapeDelay)
 shared/pixelui  header-only pixel-art UI framework
 tests/          DSP unit test and UI snapshot tools
 ```

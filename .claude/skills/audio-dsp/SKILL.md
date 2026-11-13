@@ -49,6 +49,14 @@ Because the min-hold window ≥ the average window, `g` never exceeds the requir
 - Auto gain: RMS of a −12 dBFS sine through the curve (128-point table) vs. in, clamped to −24…+12 dB, computed once per block and smoothed.
 - Mode switches crossfade the two curves over 25 ms. Tilt gains are computed per block, never `exp` per sample.
 
+## Tape delay (`shared/dsp/TapeDelay.h`)
+- Record path: `in + fb * playback` -> highcut -> lowcut (TPT SVFs, coefficients every 16 samples) -> `tanh(k x)/k` -> tape.
+  Filters and saturation sit inside the loop, so each repeat is darker than the last and >100 % feedback self-oscillates but stays bounded.
+- Playback: cubic Hermite read; delay time glides through a 0.25 s one-pole (tape-motor pitch bend, never clicks).
+- Wow = slow sine + random drift, flutter = two faster sines; depth scales with `wow^2` so low settings stay subtle.
+- Ping-pong is a crossfade (0..1): input summed into the left line, each line feeds the other – no clicks when toggled.
+- UI events: `OnsetDetector` (fast vs. slow envelope + refractory time) on the wet signal counts echo arrivals into atomics.
+
 ## Metering
 - Audio thread writes peak values into `std::atomic<float>` using a "max since last read" pattern; UI reads with `exchange(0)` each frame.
 - Gain reduction is reported as the minimum gain in the block.

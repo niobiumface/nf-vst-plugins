@@ -4,10 +4,12 @@
 #include <dsp/StackedLowpass.h>
 #include <dsp/DeEsser.h>
 #include <dsp/Saturator.h>
+#include <dsp/TapeDelay.h>
 #include <cstdio>
 #include <cmath>
 #include <random>
 #include <vector>
+#include <memory>
 
 static int failures = 0;
 #define CHECK(cond, ...) do { if (! (cond)) { ++failures; std::printf ("FAIL: " __VA_ARGS__); std::printf ("\n"); } } while (0)
@@ -258,6 +260,118 @@ int main()
                 }
                 CHECK (std::isfinite (worst) && worst < 40.0f, "saturator unstable from mode %d: %f at %.0f Hz", m, worst, fs);
             }
+    }
+
+
+    // --- tape delay (Seance)
+    for (double fs : { 44100.0, 48000.0, 96000.0 })
+    {
+        using T = sdsp::TapeDelay;
+        auto make = [fs] (float ms, float fb, float pp)
+        {
+            auto d = std::make_unique<T>();
+            d->prepare (fs, 4.0);
+            T::Params p;
+            p.delaySamples = ms * 0.001f * (float) fs; p.feedback = fb; p.wow = 0.0f;
+            p.lowCutHz = 20.0f; p.highCutHz = 18000.0f; p.pingPong = pp;
+            d->setParams (p); d->snap();
+            return d;
+        };
+
+        // a 1 kHz burst: first echo exactly one delay later at unity, the second fb lower, ping-pong alternates sides
+        for (float pp : { 0.0f, 1.0f })
+        {
+            auto d = make (100.0f, 0.5f, pp);
+            const int D = (int) std::lround (0.1 * fs), len = (int) (0.01 * fs);
+            auto burst = [&] (int i)
+            {
+                if (i >= len) return 0.0f;
+                const double w = 0.5 - 0.5 * std::cos (6.283185307 * i / len);
+                return 0.5f * (float) (w * std::sin (6.283185307 * 1000.0 * i / fs));
+            };
+            std::vector<float> L ((size_t) D * 3 + len), R (L.size());
+            for (size_t i = 0; i < L.size(); ++i)
+            {
+                const float x = burst ((int) i);
+                d->process (x, pp > 0.5f ? 0.0f : x, L[i], R[i]);
+            }
+            auto rmsRatio = [&] (const std::vector<float>& v, int at)
+            {
+                double so = 0.0, si = 0.0;
+                for (int i = 0; i < len; ++i) { so += (double) v[(size_t) (at + i)] * v[(size_t) (at + i)]; si += (double) burst (i) * burst (i); }
+                return (float) std::sqrt (so / si);
+            };
+            // timing: correlation peak with the burst (+-1 sample: group delay of the highcut at high rates)
+            int best = 0; double bestC = 0.0;
+            for (int lag = D - 5; lag <= D + 5; ++lag)
+            {
+                double c = 0.0;
+                for (int i = 0; i < len; ++i) c += (double) burst (i) * L[(size_t) (lag + i)];
+                if (c > bestC) { bestC = c; best = lag; }
+            }
+            CHECK (std::abs (best - D) <= 1, "tape delay first echo at %d (want %d) at %.0f Hz", best, D, fs);
+            const float e1 = rmsRatio (L, D), want = pp > 0.5f ? 0.5f : 1.0f;
+            CHECK (std::abs (e1 / want - 1.0f) < 0.05f, "tape delay first echo level %f (want %f) at %.0f Hz", e1, want, fs);
+            const float e2 = rmsRatio (pp > 0.5f ? R : L, 2 * D);
+            CHECK (std::abs (e2 / e1 - 0.5f) < 0.03f, "tape delay second echo ratio %f (pp %.0f) at %.0f Hz", e2 / e1, pp, fs);
+            if (pp > 0.5f)
+            {
+                const float r1 = rmsRatio (R, D), l2 = rmsRatio (L, 2 * D);
+                CHECK (r1 < 0.01f && l2 < 0.01f, "ping-pong did not alternate: R1 %f L2 %f at %.0f Hz", r1, l2, fs);
+            }
+        }
+
+        // feedback 110 %, full wow, hot noise then silence: self-oscillates but stays bounded and finite
+        {
+            auto d = make (30.0f, 1.1f, 1.0f);
+            T::Params p; p.delaySamples = 0.03f * (float) fs; p.feedback = 1.1f; p.wow = 1.0f; p.lowCutHz = 20.0f; p.highCutHz = 20000.0f; p.pingPong = 1.0f;
+            d->setParams (p);
+            std::mt19937 nrng (5);
+            std::uniform_real_distribution<float> nuni (-2.0f, 2.0f);
+            float worst = 0.0f;
+            for (int i = 0; i < (int) fs * 4; ++i)
+            {
+                if (i % (int) (fs / 3) == 0) { p.delaySamples = (float) fs * (0.01f + 0.3f * (float) ((i / 1000) % 7) / 7.0f); d->setParams (p); }
+                float l, r;
+                const float x = i < (int) fs ? nuni (nrng) : 0.0f;
+                d->process (x, -x, l, r);
+                worst = std::max ({ worst, std::abs (l), std::abs (r) });
+            }
+            CHECK (std::isfinite (worst) && worst < 8.0f, "tape delay unstable at 110 %% feedback: %f at %.0f Hz", worst, fs);
+        }
+
+        // feedback 0: a quiet tone comes back once, at unity (filters open, saturation slope 1)
+        {
+            auto d = make (50.0f, 0.0f, 0.0f);
+            double sIn = 0.0, sOut = 0.0;
+            const int n = (int) fs;
+            const int D = (int) std::lround (0.05 * fs);
+            std::vector<float> in ((size_t) n);
+            for (int i = 0; i < n; ++i)
+            {
+                in[(size_t) i] = 0.01f * (float) std::sin (6.283185307 * 1000.0 * i / fs);
+                float l, r;
+                d->process (in[(size_t) i], in[(size_t) i], l, r);
+                if (i > n / 2) { sIn += (double) in[(size_t) (i - D)] * in[(size_t) (i - D)]; sOut += (double) l * l; }
+            }
+            const float errDb = 10.0f * std::log10 ((float) (sOut / sIn));
+            CHECK (std::abs (errDb) < 0.2f, "tape delay colours a 1 kHz tone by %f dB at %.0f Hz", errDb, fs);
+        }
+
+        // onset detector: one onset per click, none on a steady tone
+        {
+            sdsp::OnsetDetector od;
+            od.prepare (fs);
+            int count = 0;
+            for (int i = 0; i < (int) fs * 2; ++i)
+            {
+                const int ph = i % (int) (fs / 4);
+                float x = ph < (int) (fs * 0.01) ? 0.3f * (float) std::sin (i * 0.3) * (float) std::exp (-ph / (fs * 0.003)) : 0.0f;
+                if (i > (int) fs) x = 0.2f * (float) std::sin (i * 0.05);
+                if (od.process (x) > 0.0f) ++count;
+            }
+            CHECK (count == 5, "onset detector found %d onsets (want 5: 4 clicks + the tone start) at %.0f Hz", count, fs);
+        }
     }
 
     std::printf (failures == 0 ? "ALL DSP TESTS PASSED\n" : "%d DSP TEST(S) FAILED\n", failures);
